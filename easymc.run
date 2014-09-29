@@ -211,7 +211,7 @@ Categories=Game;Applications;" > /usr/share/applications/minecraft.desktop' | su
 mc_install_icon() {
 	echo -e "${INFO} Installing icons to /usr/share/icons...${RESET}"
 
-    sudo wget -qO /usr/share/icons/minecraft.png http://www.ghost1227.com/graphics/easymcicon.png
+    sudo wget -qO /usr/share/icons/minecraft.png https://raw.githubusercontent.com/Section214/EasyMC/master/easymcicon.png
 
 	if [[ $? != '0' ]]; then
 		echo -e "${ERROR} Can't install icons! Exiting...${RESET}"
