@@ -135,7 +135,7 @@ mc_dl_minecraft() {
 	mkdir ${HOME}/.minecraft
 
 	echo -e "${INFO} Downloading Minecraft jar file...${RESET}"
-	wget -qO ${HOME}/.minecraft/minecraft.jar https://s3.amazonaws.com/MinecraftDownload/launcher/minecraft.jar
+	wget -qO ${HOME}/.minecraft/minecraft.jar https://s3.amazonaws.com/Minecraft.Download/launcher/Minecraft.jar
 
 	if [[ $? != '0' ]]; then
 		echo -e "${ERROR} Can't download jar file! Exiting...${RESET}"
