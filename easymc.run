@@ -1,0 +1,272 @@
+#!/bin/bash
+#
+# easymc v0.1 - Simple, self-contained Minecraft installer
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
+# 02110-1301, USA.
+
+VER=0.1
+INFO="\e[1;33m::\e[1;37m"
+ERROR="\e[1;31m==>\e[1;37m"
+NOTICE="\e[1;34m::\e[1;37m"
+SUCCESS="\e[1;32m==>\e[1;37m"
+RESET="\e[0m"
+
+
+##############################
+### USAGE                  ###
+##############################
+usage() {
+	echo "easymc v${VER}"
+	echo
+	echo "easymc -- [option]"
+	echo "  -h, --help         Display help and exit"
+	echo "  -i, --install      Install Minecraft"
+	echo "  -u, --uninstall    Uninstall Minecraft"
+}
+
+##############################
+### CHECK FILESYSTEM       ###
+##############################
+mc_check_fs() {
+	if [[ -d ${HOME}/.minecraft ]]; then
+		echo -e "${ERROR} Directory ${HOME}/.minecraft exits! Exiting..."
+		echo -e "${ERROR} Please run 'easymc -u' to cleanup prior to installing."
+		exit 1
+	fi
+
+	if [[ -f /usr/bin/minecraft ]]; then
+		echo -e "${ERROR} File /usr/bin/minecraft exists! Exiting..."
+		echo -e "${ERROR} Please run 'easymc -u' to cleanup prior to installing."
+		exit 1
+	fi
+
+	if [[ -f /usr/share/applications/minecraft.desktop ]]; then
+		echo -e "${ERROR} File /usr/share/applications/minecraft.desktop exists! Exiting..."
+		echo -e "${ERROR} Please run 'easymc -u' to cleanup prior to installing."
+		exit 1
+	fi
+
+	if [[ -f /usr/share/icons/minecraft.png ]]; then
+		echo -e "${ERROR} File /usr/share/icons/minecraft.png exists! Exiting..."
+		echo -e "${ERROR} Please run 'easymc -u' to cleanup prior to installing."
+		exit 1
+	fi
+
+	return 0
+}
+
+##############################
+### CHECK DEPENDENCIES     ###
+##############################
+mc_check_deps() {
+	which java &>/dev/null
+	if [[ $? != '0' ]]; then
+		echo -e "${ERROR} Java not found!${RESET}"
+		echo -e "${INFO} Attempting to install automatically...${RESET}"
+
+		which apt-get &>/dev/null
+		if [[ $? == '0' ]]; then
+			echo -e "${INFO} Detected Debian-based distro, running apt-get...${RESET}"
+			echo -e "${INFO} Please enter your password to continue:${RESET}"
+			sudo apt-get -qy install openjdk-6-jre &>/dev/null
+			if [[ $? != '0' ]]; then
+				echo -e "${ERROR} Something went wrong!${RESET}"
+				echo -e "${INFO} Please install Java manually and re-run the script!${RESET}"
+				exit 1
+			fi
+		else
+			which yum &>/dev/null
+			if [[ $? == '0' ]]; then
+				echo -e "${INFO} Detected Redhat-based distro, downloading package...${RESET}"
+				ARCH=`uname -m`
+				case ${ARCH} in
+					[iI][3456]86 )
+						ARCH="i586"
+						;;
+					x86_64 | amd64 )
+						ARCH="x64"
+						;;
+				esac
+				wget -q "http://download.oracle.com/otn-pub/java/jdk/7u13-b20/jre-7u13-linux-${ARCH}.rpm"
+				if [[ $? != '0' ]]; then
+					echo -e "${ERROR} Something went wrong!${RESET}"
+					echo -e "${INFO} Please install Java manually and re-run the script!${RESET}"
+					exit 1
+				fi
+				sudo rpm -qi jre-7u13-linux-${ARCH}.rpm
+				if [[ $? != '0' ]]; then
+					rm -f jre-7u13-linux-${ARCH}.rpm
+					echo -e "${ERROR} Something went wrong!${RESET}"
+					echo -e "${INFO} Please install Java manually and re-run the script!${RESET}"
+					exit 1
+				else
+					rm -f jre-7u13-linux-${ARCH}.rpm
+				fi
+			else
+				echo -e "${ERROR} Can't determine distro, or unsupported!${RESET}"
+				echo -e "${INFO} Please install Java manually and re-run the script!${RESET}"
+				exit 1
+			fi
+		fi
+	else
+		echo -e "${NOTICE} Found Java! Continuing...${RESET}"
+		return 0
+	fi
+}
+
+##############################
+### DOWNLOAD MINECRAFT     ###
+##############################
+mc_dl_minecraft() {
+	echo -e "${INFO} Setting up Minecraft profile at ${HOME}/.minecraft...${RESET}"
+	mkdir ${HOME}/.minecraft
+
+	echo -e "${INFO} Downloading Minecraft jar file...${RESET}"
+	wget -qO ${HOME}/.minecraft/minecraft.jar https://s3.amazonaws.com/MinecraftDownload/launcher/minecraft.jar
+
+	if [[ $? != '0' ]]; then
+		echo -e "${ERROR} Can't download jar file! Exiting...${RESET}"
+		rm -Rf ${HOME}/.minecraft
+		exit 1
+	fi
+
+	echo -e "${NOTICE} Download complete!${RESET}"
+	return 0
+}
+
+##############################
+### SETUP EXECUTABLE       ###
+##############################
+mc_setup_bin() {
+	echo -e "${INFO} Installing Minecraft bin...${RESET}"
+
+	echo 'echo "#!/bin/bash
+
+java -Xmx1024M -Xms512M -jar ${HOME}/.minecraft/minecraft.jar &>/dev/null &" > /usr/bin/minecraft' | sudo -s
+
+	if [[ $? != '0' ]]; then
+		echo -e "${ERROR} Can't install Minecraft bin! Exiting...${RESET}"
+		rm -Rf ${HOME}/.minecraft
+		exit 1
+	fi
+
+	sudo chmod +x /usr/bin/minecraft
+
+	if [[ $? != '0' ]]; then
+		echo -e "${ERROR} Can't install Minecraft bin! Exiting...${RESET}"
+		sudo rm -f /usr/bin/minecraft
+		rm -Rf ${HOME}/.minecraft
+		exit 1
+	fi
+
+	echo -e "${NOTICE} Installed bin successfully!${RESET}"
+	return 0
+}
+
+
+##############################
+### INSTALL DESKTOP FILE   ###
+##############################
+mc_install_desktop() {
+	echo -e "${INFO} Installing Minecraft .desktop file...${RESET}"
+
+	echo 'echo "[Desktop Entry]
+Name=Minecraft
+GenericName=Minecraft
+Comment=Launch Minecraft
+Exec=minecraft
+Terminal=false
+Type=Application
+StartupNotify=true
+Icon=minecraft
+Categories=Game;Applications;" > /usr/share/applications/minecraft.desktop' | sudo -s
+
+	if [[ $? != '0' ]]; then
+		echo -e "${ERROR} Can't install Minecraft .desktop file! Exiting...${RESET}"
+		sudo rm -f /usr/bin/minecraft
+		rm -Rf ${HOME}/.minecraft
+		exit 1
+	fi
+
+	echo -e "${NOTICE} Installed .desktop file successfully!${RESET}"
+	return 0
+}
+
+##############################
+### INSTALL ICON           ###
+##############################
+mc_install_icon() {
+	echo -e "${INFO} Installing icons to /usr/share/icons...${RESET}"
+
+    sudo wget -qO /usr/share/icons/minecraft.png http://www.ghost1227.com/graphics/easymcicon.png
+
+	if [[ $? != '0' ]]; then
+		echo -e "${ERROR} Can't install icons! Exiting...${RESET}"
+		sudo rm -f /usr/bin/minecraft
+		rm -Rf ${HOME}/.minecraft
+		exit 1
+	fi
+
+	echo -e "${NOTICE} Installed icons successfully!${RESET}"
+
+	echo -e "${SUCCESS} Installation completed successfully!${RESET}"
+	echo -e "${SUCCESS} You can now launch Minecraft by running 'minecraft' from the command line or selecting it from the main menu.${RESET}"
+	return 0
+}
+
+##############################
+### CLEANUP                ###
+##############################
+mc_uninstall() {
+	echo -e "${INFO} Uninstalling Minecraft..."
+	sudo rm -f /usr/bin/minecraft
+	sudo rm -f /usr/share/applications/minecraft.desktop
+	sudo rm -f /usr/share/icons/minecraft.png
+	rm -Rf ${HOME}/.minecraft
+	echo -e "${SUCCESS} Uninstall completed!"
+	return 0
+}
+
+
+##############################
+### GET RUNTIME ARGS       ###
+##############################
+
+while [ "$#" -ne "0" ]; do
+	case ${1} in
+		'-u' | '--uninstall')
+			mc_uninstall
+			exit 0
+			;;
+		'-i' | '--install')
+			mc_check_fs
+			mc_check_deps
+			mc_dl_minecraft
+			mc_setup_bin
+			mc_install_desktop
+			mc_install_icon
+			exit 0
+			;;
+		'-h' | '--help' | *)
+			usage
+			exit 0
+			;;
+	esac
+	shift
+done
+
+usage
+exit 0
